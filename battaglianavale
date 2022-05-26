@@ -1,0 +1,856 @@
+/*
+ ============================================================================
+ Name        : 1.c
+ Author      : Gruppo1: Alex Confalone - Caterina Francesco - Salvatore Guadagno - Nicola Leonetti - Gioele Anselmi
+ Version     : 1.0
+ Copyright   : Copyright by 1_group
+ Description : Battaglia Navale in C, Ansi-style
+ ============================================================================
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX 16																			//definizione grandezza matrice quadrata di righe e colonne
+#define scAcqua 0																		//stato cella acqua
+#define scNave 1																		//stato cella nave
+#define scColpito 2																		//stato cella colpito
+#define scColpitoAcqua 3																//stato cella colpito acqua
+#define BLU "\033[34m"
+#define VERDE "\033[32m"
+#define ROSSO "\033[31m"
+#define RESET "\033[0m"
+#define vero 1
+#define falso 0
+
+//definizione strutture
+typedef struct{
+	int posizione[MAX][MAX];
+	int righe;
+	int colonne;
+}tabella;
+
+//funzioni di lettura e scrittura
+int LeggereRighe(tabella *t);
+int LeggereColonne(tabella *t);
+int LeggereValore(tabella *t, int riga, int colonna);
+void ScrivereRighe(tabella *t, int valore);
+void ScrivereColonne(tabella *t, int valore);
+void ScrivereValore(tabella *t, int riga, int colonna, int valore);
+
+//funzioni principali
+void Gioco(tabella *p1, tabella *p2);													//inizia una nuova partita
+int CaricaPartita();																	//carica la partita salvata nel file
+void Istruzioni();																		//mostra le istruzioni
+
+//funzioni di elaborazione
+void InizializzaTabella(tabella *t, int riga, int colonna);								//tabella è inizializzata da pos 0 a 15
+int chkScelta();																		//controlla se il valore è stato inserito correttamente e lo restituisce
+void StampaTabella(tabella *t);															//mostra la propria tabella
+void StampaTabella2(tabella *t);														//mostra la tabella dell'avversario
+void CaricaTabella(tabella *t,int player);												//riempie le tabelle di navi
+	int LeggiLettera();																	//legge carattere da A a P, restituisce il valore in righe della lettera
+	int LeggiNumero();																	//legge numero da 1 a 16 e lo restituisce
+	int ControllaPosizione(tabella *t,int lengNavi,int riga,int colonna,int direzione);	//controlla se la posizione e la direzione della nave che si vuole inserire sia disponibile
+		int ControllaVicino(tabella *t,int righe,int colonne);							//sottofunzione di ControllaPosizione, controlla la vicinanza tra le navi
+int NaviPresenti(tabella *t);
+int Colpisci(tabella *t,int riga,int colonna);
+void Radar(tabella *t,int riga,int colonna);
+void LargoRaggio(tabella *t,int riga,int colonna);
+void Bombardamento(tabella *t,int RigoCol);
+
+int main(void){
+	tabella t1, t2;																		//creazione di 2 tabelle
+	tabella *p1, *p2;
+	int righe=MAX, colonne=MAX, scelta, chiusuraProg=falso;
+
+	p1 = &t1;
+	p2 = &t2;
+
+	p1 = (tabella*) malloc(MAX*sizeof(tabella));
+	p2 = (tabella*) malloc(MAX*sizeof(tabella));
+
+	printf("-|| Benvenuto in battaglia navale ||-\n1) Gioca\n2) Continua\n3) Guida\n4) Esci\n-> ");
+	scelta=chkScelta();
+	while(chiusuraProg!=vero){
+		system("CLS");
+		if(scelta==1){
+			InizializzaTabella(p1,righe,colonne);
+			InizializzaTabella(p2,righe,colonne);
+			Gioco(p1,p2);
+			printf("1) Gioca\n2) Continua\n3) Guida\n4) Esci\n-> ");
+			scelta=chkScelta(scelta);
+		}else if(scelta==2){
+//			CaricaPartita();
+//			system("PAUSE");
+//			system("CLS");
+//			printf("1) Gioca\n2) Continua\n3) Guida\n4) Esci\n-> ");
+//			scelta=chkScelta(scelta);
+		}else if(scelta==3){
+			Istruzioni();
+			system("PAUSE");
+			system("CLS");
+			printf("1) Gioca\n2) Continua\n3) Guida\n4) Esci\n-> ");
+			scelta=chkScelta(scelta);
+		}else{
+			chiusuraProg=vero;
+		}
+	}
+	printf("Grazie per aver giocato ;D\n");
+	system("PAUSE");
+	return 0;
+}
+void InizializzaTabella(tabella *t, int righe, int colonne){
+	int i, j, valore=scAcqua;
+
+	ScrivereRighe(t,righe);				//imposta le righe della tabella
+	ScrivereColonne(t,colonne);			//imposta le colonne della tabella
+
+	i=0;
+	while(i<LeggereRighe(t)){
+		j=0;
+		while(j<LeggereColonne(t)){
+			ScrivereValore(t,i,j,valore);
+			j++;
+	    }
+	    i++;
+	}
+
+}
+int chkScelta(){
+	char c;
+	int n;
+
+	c=getchar();
+	fflush(stdin);
+	fflush(stdout);
+	while(c!='1'&&c!='2'&&c!='3'&&c!='4'){
+		printf("Scelta non contemplata, riprova.\n-> ");
+		fflush(stdin);
+		fflush(stdout);
+		c=getchar();
+	}
+	if(c=='1')
+		n=1;
+	else if(c=='2')
+		n=2;
+	else if(c=='3')
+		n=3;
+	else
+		n=4;
+	return n;
+}
+void Gioco(tabella *p1, tabella *p2){
+	int riga,colonna,nturno=1,scelta,riScegli,radar1=0,radar2=0,largoraggio1=0,largoraggio2=0,bombardamento1=0,bombardamento2=0,RigoCol,turno1=vero,turno2=falso,riprova1,riprova2;
+
+	CaricaTabella(p1,1);
+	system("CLS");
+	CaricaTabella(p2,2);
+	StampaTabella2(p2);
+
+	while(NaviPresenti(p1)!=0&&NaviPresenti(p2)!=0){
+		system("CLS");
+		while(NaviPresenti(p2)!=0&&(turno1==vero||riprova1==vero)){
+			riprova1=falso;
+			printf("Player1 - Turno %d\n1) Spara\n2) Radar\n3) Colpo a largo raggio\n4) Bombardamento\n-> ",nturno);
+			fflush(stdin);
+			fflush(stdout);
+			riScegli=vero;
+			while(riScegli==vero){
+				riScegli=falso;
+				scelta=chkScelta();
+				printf("\n");
+				if(scelta==2&&radar1>=3){
+					printf("3 utilizzi superati, riprova con un altra scelta.\n-> ");
+					riScegli=vero;
+				}
+				if(scelta==3&&largoraggio1>=3){
+					printf("3 utilizzi superati, riprova con un altra scelta.\n-> ");
+					riScegli=vero;
+				}
+				if(scelta==4&&(bombardamento1==1||nturno<10)){
+					if(bombardamento1==vero){
+						printf("Hai gia usato bombardamento, riprova con un altra scelta.\n-> ");
+					}else{
+						printf("Devono passare 10 turni per utilizzare questa abilita', riprova con un altra scelta.\n-> ");
+					}
+					riScegli=vero;
+				}
+			}
+			system("CLS");
+			StampaTabella2(p2);
+			if(scelta==1){
+				printf("Player1\nColpisci in\n");
+				riga=LeggiLettera();
+				colonna=LeggiNumero();
+				system("CLS");
+				riprova1=Colpisci(p2,riga,colonna);
+			}if(scelta==2){
+				printf("Player1\nRadar: Inserisci il centro del quadrato 3x3\n");
+				riga=LeggiLettera();
+				colonna=LeggiNumero();
+				system("CLS");
+				Radar(p2,riga,colonna);
+				radar1++;
+			}if(scelta==3){
+				printf("Player1\nLargo Raggio: Inserisci il centro del quadrato 3x3\n");
+				riga=LeggiLettera();
+				colonna=LeggiNumero();
+				system("CLS");
+				LargoRaggio(p2,riga,colonna);
+				largoraggio1++;
+			}if(scelta==4){
+				printf("Player1\nBombardamento: Inserisci [1 o 2] per la riga, [3 o 4] per la colonna\n");
+				RigoCol=chkScelta();
+				system("CLS");
+				Bombardamento(p2,RigoCol);
+				bombardamento1=1;
+			}
+			printf("\n");
+			StampaTabella2(p2);
+			turno1=falso;
+			turno2=vero;
+			nturno++;
+		}
+		system("PAUSE");
+		system("CLS");
+		while(NaviPresenti(p1)!=0&&(turno2==vero||riprova2==vero)){
+			riprova2=falso;
+			StampaTabella2(p1);
+			printf("Player2 - Turno %d\n1) Spara\n2) Radar\n3) Colpo a largo raggio\n4) Bombardamento\n-> ",nturno);
+			fflush(stdin);
+			fflush(stdout);
+			riScegli=vero;
+			while(riScegli==vero){
+				riScegli=falso;
+				scelta=chkScelta();
+				printf("\n");
+				if(scelta==2&&radar2>=3){
+					printf("3 utilizzi superati, riprova con un altra scelta.\n-> ");
+					riScegli=vero;
+				}
+				if(scelta==3&&largoraggio2>=3){
+					printf("3 utilizzi superati, riprova con un altra scelta.\n-> ");
+					riScegli=vero;
+				}
+				if(scelta==4&&(bombardamento2==1||nturno<10)){
+					if(bombardamento2==vero){
+						printf("Hai gia usato bombardamento, riprova con un altra scelta.\n-> ");
+					}else{
+						printf("Devono passare 10 turni per utilizzare questa abilita', riprova con un altra scelta.\n-> ");
+					}
+					riScegli=vero;
+				}
+			}
+			system("CLS");
+			StampaTabella2(p1);
+			if(scelta==1){
+				printf("Player2\nColpisci in\n");
+				riga=LeggiLettera();
+				colonna=LeggiNumero();
+				riprova2=Colpisci(p1,riga,colonna);
+				printf("\n");
+			}if(scelta==2){
+				printf("Player2\nRadar: Inserisci il centro del quadrato 3x3\n");
+				riga=LeggiLettera();
+				colonna=LeggiNumero();
+				Radar(p1,riga,colonna);
+				printf("\n");
+				radar2++;
+			}if(scelta==3){
+				printf("Player2\nLargo Raggio: Inserisci il centro del quadrato 3x3\n");
+				riga=LeggiLettera();
+				colonna=LeggiNumero();
+				LargoRaggio(p1,riga,colonna);
+				printf("\n");
+				largoraggio2++;
+			}if(scelta==4){
+				printf("Player2\nBombardamento: Inserisci [1 o 2] per la riga, [3 o 4] per la colonna\n");
+				RigoCol=chkScelta();
+				Bombardamento(p1,RigoCol);
+				printf("\n");
+				bombardamento2=1;
+			}
+			turno2=falso;
+			turno1=vero;
+			nturno++;
+		}
+	}
+	system("CLS");
+	printf("Tabella di Player1\n");
+	StampaTabella(p1);
+	printf("\nTabella di Player2\n");
+	StampaTabella(p2);
+	printf("Partita finita!\nPlayer1: %d navi rimanenti\nPlayer2: %d navi rimanenti\n",NaviPresenti(p1),NaviPresenti(p2));
+	if(NaviPresenti(p1)==0){
+		printf(VERDE"Ha vinto Player2.\n"RESET);
+	}else{
+		printf(VERDE"Ha vinto Player1.\n"RESET);
+	}
+	system("PAUSE");
+	system("CLS");
+}
+int CaricaPartita(){
+
+	return 0;
+}
+void Istruzioni(){
+	FILE *fpIstruzioni = fopen("Istruzioni.txt", "r");
+	char c;
+
+	printf("Verifico errori lettura del file...\n");
+	if(fpIstruzioni==NULL){
+		printf("Errore nell'apertura.\n");
+		system("PAUSE");
+		exit(1);
+	}
+	//cicla fintanto che non si arriva alla fine del  file (FunctionEndOfFile)
+	while((c=fgetc(fpIstruzioni))!=EOF){
+		printf("%c", c);
+	}
+	printf("\n");
+	fclose(fpIstruzioni);
+	system("pause");
+}
+void StampaTabella(tabella *t){
+	int i, j;
+
+	printf("\n   ");
+	i=0;
+	while(i<LeggereRighe(t)){
+		printf("%d\t",i+1);
+		i++;
+	}
+
+	printf("\n   ");
+	i=0;
+	while(i<LeggereRighe(t)){
+		printf("__\t");
+		i++;
+	}
+
+	printf("\n");
+	i=0;
+	while(i<LeggereRighe(t)){
+		printf("\n%c| ",('\x41')+i);					//'\x41' è l'ASCII di A, e lo incremento ogni volta di 1
+		j=0;
+		while(j<LeggereColonne(t)-1){
+			if(LeggereValore(t,i,j)==scNave){
+				printf(VERDE"x\t"RESET);
+			}else if(LeggereValore(t,i,j)==scColpito){
+				printf(ROSSO"x\t"RESET);
+			}else if(LeggereValore(t,i,j)==scColpitoAcqua){
+				printf("*\t");
+			}else{
+				printf(BLU"~\t"RESET);
+			}
+		  j++;
+		}
+		if(LeggereValore(t,i,j)==scNave){
+			printf(VERDE"x"RESET" |\n");
+		}else if(LeggereValore(t,i,j)==scColpito){
+			printf(ROSSO"x"RESET" |\n");
+		}else if(LeggereValore(t,i,j)==scColpito){
+			printf("*\t");
+		}else{
+			printf(BLU"~"RESET" |\n");
+		}
+		i++;
+	}
+}
+void StampaTabella2(tabella *t){
+	int i, j;
+
+	printf("\n   ");
+	i=0;
+	while(i<LeggereRighe(t)){
+		printf("%d\t",i+1);
+		i++;
+	}
+
+	printf("\n   ");
+	i=0;
+	while(i<LeggereRighe(t)){
+		printf("__\t");
+		i++;
+	}
+
+	printf("\n");
+	i=0;
+	while(i<LeggereRighe(t)){
+		printf("\n%c| ",('\x41')+i);			//'\x41' è l'ASCII di A, e lo incremento ogni volta di 1
+		j=0;
+		while(j<LeggereColonne(t)-1){
+			if(LeggereValore(t,i,j)==scColpito){
+				printf(ROSSO"x\t"RESET);
+			}else if(LeggereValore(t,i,j)==scColpitoAcqua){
+				printf("*\t");
+			}else{
+				printf(BLU"~\t"RESET);
+			}
+		  j++;
+		}
+		if(LeggereValore(t,i,j)==scColpito){
+			printf(ROSSO"x"RESET" |\n");
+		}else if(LeggereValore(t,i,j)==scColpitoAcqua){
+			printf("* |\n");
+		}else{
+			printf(BLU"~"RESET" |\n");
+		}
+		i++;
+	}
+}
+void CaricaTabella(tabella *t,int player){
+	int i=0,riga,colonna,valore=scNave;
+	int lengNavi=5,naviplaced,NNavi=1,direzione;
+	lengNavi=2;												//ELILINA QUESTA RIGA
+	while(lengNavi!=0){
+		naviplaced=1;
+		while(naviplaced<=NNavi){
+			system("CLS");
+			printf("Player %d\t\t\tPosiziona le tue navi\tEs. E(invio) 3(invio) | E (spazio) 3 (invio) | E3 (invio)",player);
+			StampaTabella(t);
+			printf("%d su %d navi inserite di grandezza %d\n",naviplaced-1,NNavi,lengNavi);
+			riga=LeggiLettera();
+			colonna=LeggiNumero();
+			if(lengNavi==1){
+				if(ControllaVicino(t,riga,colonna)==vero){
+					ScrivereValore(t,riga,colonna,valore); //devi ancora controllare se posizione è disponibile
+					naviplaced++;
+				}else{
+					printf("Posizione non permessa.\n");
+					system("PAUSE");
+				}
+			}else{
+				printf("\nInserisci la direzione  NORD 1 - SUD 2 - EST 3 - OVEST 4\n");
+				fflush(stdin);
+				fflush(stdout);
+				direzione=chkScelta();
+				if(ControllaPosizione(t,lengNavi,riga,colonna,direzione)==vero){
+					i=0;
+					if(direzione==1){
+						while(i<lengNavi){
+							ScrivereValore(t,riga,colonna,valore);
+							riga--;
+							i++;
+						}
+					}
+					if(direzione==2){
+						while(i<lengNavi){
+							ScrivereValore(t,riga,colonna,valore);
+							riga++;
+							i++;
+						}
+					}
+					if(direzione==3){
+						while(i<lengNavi){
+							ScrivereValore(t,riga,colonna,valore);
+							colonna++;
+							i++;
+						}
+					}
+					if(direzione==4){
+						while(i<lengNavi){
+							ScrivereValore(t,riga,colonna,valore);
+							colonna--;
+							i++;
+						}
+					}
+					naviplaced++;
+				}else{
+					printf("Posizione non permessa.\n");
+					system("PAUSE");
+				}
+			}
+		}
+		lengNavi--;
+		NNavi++;
+	}
+}
+int LeggereRighe(tabella *t){
+	return t->righe;
+}
+void ScrivereRighe(tabella *t,int valore){
+	t->righe=valore;
+}
+int LeggereColonne(tabella *t){
+	return t->colonne;
+}
+void ScrivereColonne(tabella *t,int valore){
+	t->colonne=valore;
+}
+int LeggereValore(tabella *t,int riga,int colonna){
+	return t->posizione[riga][colonna];
+}
+void ScrivereValore(tabella *t,int riga,int colonna,int valore){
+	t->posizione[riga][colonna]=valore;
+}
+int ControllaPosizione(tabella *t,int lengNavi,int riga,int colonna,int direzione){
+	int i,disponibile=vero;
+
+	i=0;
+	while(disponibile==vero&&i<lengNavi){
+		if(direzione==1){
+			if(!((riga>=0&&riga<=15)&&ControllaVicino(t,riga,colonna)==vero)){
+				disponibile=falso;
+				printf("riga %d colonna %d illegale.\n",riga+1,colonna+1);
+			}
+			riga--;
+		}
+		if(direzione==2){
+			if(!((riga>=0&&riga<=15&&ControllaVicino(t,riga,colonna)==vero))){
+				disponibile=falso;
+				printf("riga %d colonna %d illegale.\n",riga+1,colonna+1);
+			}
+			riga++;
+		}
+		if(direzione==3){
+			if(!((colonna>=0&&colonna<=15&&ControllaVicino(t,riga,colonna)==vero))){
+				disponibile=falso;
+				printf("riga %d colonna %d illegale.\n",riga+1,colonna+1);
+			}
+			colonna++;
+		}
+		if(direzione==4){
+			if(!((colonna>=0&&colonna<=15&&ControllaVicino(t,riga,colonna)==vero))){
+				disponibile=falso;
+				printf("riga %d colonna %d illegale.\n",riga+1,colonna+1);
+			}
+			colonna--;
+		}
+		i++;
+	}
+	return disponibile;
+}
+int LeggiLettera(){
+	int i=0,n=i;
+	char c;
+
+	while(!((c>='A')&&(c<='P'))){
+		printf("A-P: ");
+		scanf(" %c", &c);		//funziona solo se si lascia uno spazio prima di %c nell'esecutore eclipse
+		c=toupper(c);
+	}
+	while(c!='A'+i){
+		i++;
+		n=i;
+	}
+
+	return n;
+}
+int LeggiNumero(){
+	int n=0;
+	while(n<1||n>MAX){
+		printf("1-16: ");
+		scanf("%d", &n);
+		fflush(stdin);
+		fflush(stdout);
+	}
+	return n-1;
+}
+int ControllaVicino(tabella *t,int righe,int colonne){
+	int i,j,areaR,areaC,libero=vero;
+
+	if((righe==0)&&(colonne==0)){
+		areaR=2;
+		areaC=2;
+	}
+	if((righe==0)&&((colonne>0)&&(colonne<15))){
+		areaR=2;
+		areaC=3;
+		colonne--;
+	}
+	if((righe==0)&&(colonne==15)){
+		areaR=2;
+		areaC=2;
+		colonne--;
+	}
+	if(((righe>0)&&(righe<15))&&(colonne==0)){
+		areaR=3;
+		areaC=2;
+		righe--;
+	}
+	if(((righe>0)&&(righe<15))&&((colonne>0)&&(colonne<15))){
+		areaR=3;
+		areaC=3;
+		righe--;
+		colonne--;
+	}
+	if(((righe>0)&&(righe<15))&&(colonne==15)){
+		areaR=3;
+		areaC=2;
+		righe--;
+		colonne--;
+	}
+	if((righe==15)&&(colonne==0)){
+		areaR=2;
+		areaC=2;
+		righe--;
+	}
+	if((righe==15)&&((colonne>0)&&(colonne<15))){
+		areaR=2;
+		areaC=3;
+		righe--;
+		colonne--;
+	}
+	if((righe==15)&&(colonne==15)){
+		areaR=2;
+		areaC=2;
+		righe--;
+		colonne--;
+	}
+
+	i=0;
+	while(i<areaR&&libero==vero){
+		j=0;
+		while(j<areaC&&libero==vero){
+			if(!(LeggereValore(t,righe+i,colonne+j)==scAcqua)){
+				libero=falso;
+			}
+			j++;
+		}
+		i++;
+	}
+	return libero;
+}
+int NaviPresenti(tabella *t){
+	int i, j, navi=0;
+
+	i=0;
+	while(i<LeggereRighe(t)){
+		j=0;
+		while(j<LeggereColonne(t)){
+			if(LeggereValore(t,i,j)==scNave){
+				navi++;
+			}
+			j++;
+		}
+		i++;
+	}
+	return navi;
+}
+int Colpisci(tabella *t,int riga,int colonna){
+	int i,Nord=0,Sud=0,Est=0,Ovest=0,nonAffondato=falso,riprova;
+
+	if(LeggereValore(t,riga,colonna)==scNave||LeggereValore(t,riga,colonna)==scColpito){
+		ScrivereValore(t,riga,colonna,scColpito);
+	}else{
+		ScrivereValore(t,riga,colonna,scColpitoAcqua);
+	}
+	i=0;
+	while(LeggereValore(t,riga-i,colonna)==scColpito&&nonAffondato==falso&&Nord==falso){				//controlla Nord
+		i++;
+		if((LeggereValore(t,riga-i,colonna)==scNave)||(LeggereValore(t,riga-i,colonna)!=scColpito)){
+			Nord=vero;
+			if(LeggereValore(t,riga-i,colonna)==scNave){
+				nonAffondato=vero;
+			}
+		}
+	}
+	i=0;
+	while(LeggereValore(t,riga+i,colonna)==scColpito&&nonAffondato==falso&&Sud==falso){					//controlla Sud
+		i++;
+		if((LeggereValore(t,riga+i,colonna)==scNave)||(LeggereValore(t,riga+i,colonna)!=scColpito)){
+			Sud=vero;
+			if(LeggereValore(t,riga+i,colonna)==scNave){
+				nonAffondato=vero;
+			}
+		}
+	}
+	i=0;
+	while(LeggereValore(t,riga,colonna+i)==scColpito&&nonAffondato==falso&&Est==falso){					//controlla Est
+		i++;
+		if((LeggereValore(t,riga,colonna+i)==scNave)||(LeggereValore(t,riga,colonna+i)!=scColpito)){
+			Est=vero;
+			if(LeggereValore(t,riga,colonna+i)==scNave){
+				nonAffondato=vero;
+			}
+		}
+	}
+	i=0;
+	while(LeggereValore(t,riga,colonna-i)==scColpito&&nonAffondato==falso&&Ovest==falso){				//controlla Ovest
+		i++;
+		if((LeggereValore(t,riga,colonna-i)==scNave)||(LeggereValore(t,riga,colonna-i)!=scColpito)){
+			Ovest=vero;
+			if(LeggereValore(t,riga,colonna-i)==scNave){
+				nonAffondato=vero;
+			}
+		}
+	}
+	if(nonAffondato==vero){
+		printf(VERDE"- Colpito "RESET);
+		riprova=vero;
+	}else if((Nord==vero)&&(Sud==vero)&&(Est==vero)&&(Ovest==vero)&&nonAffondato==falso){
+		printf(ROSSO"- Affondata "RESET);
+		riprova=vero;
+	}else{
+		printf(BLU"- Acqua "RESET);
+		riprova=falso;
+	}
+	return riprova;
+}
+void Radar(tabella *t,int riga,int colonna){
+	int i,j,areaR,areaC;
+
+	if((riga==0)&&(colonna==0)){
+		areaR=2;
+		areaC=2;
+	}
+	if((riga==0)&&((colonna>0)&&(colonna<15))){
+		areaR=2;
+		areaC=3;
+		colonna--;
+	}
+	if((riga==0)&&(colonna==15)){
+		areaR=2;
+		areaC=2;
+		colonna--;
+	}
+	if(((riga>0)&&(riga<15))&&(colonna==0)){
+		areaR=3;
+		areaC=2;
+		riga--;
+	}
+	if(((riga>0)&&(riga<15))&&((colonna>0)&&(colonna<15))){
+		areaR=3;
+		areaC=3;
+		riga--;
+		colonna--;
+	}
+	if(((riga>0)&&(riga<15))&&(colonna==15)){
+		areaR=3;
+		areaC=2;
+		riga--;
+		colonna--;
+	}
+	if((riga==15)&&(colonna==0)){
+		areaR=2;
+		areaC=2;
+		riga--;
+	}
+	if((riga==15)&&((colonna>0)&&(colonna<15))){
+		areaR=2;
+		areaC=3;
+		riga--;
+		colonna--;
+	}
+	if((riga==15)&&(colonna==15)){
+		areaR=2;
+		areaC=2;
+		riga--;
+		colonna--;
+	}
+
+	i=0;
+	while(i<areaR){
+		j=0;
+		while(j<areaC){
+			if(LeggereValore(t,riga+i,colonna+j)==scAcqua){
+				printf("Acqua in riga [%d] colonna [%d]\n",riga+i+1,colonna+j+1);
+			}else if(LeggereValore(t,riga+i,colonna+j)==scNave){
+				printf("Nave in riga [%d] colonna [%d]\n",riga+i+1,colonna+j+1);
+			}else if(LeggereValore(t,riga+i,colonna+j)==scColpito){
+				printf("Nave gia colpita in riga [%d] colonna [%d]\n",riga+i+1,colonna+j+1);
+			}else{
+				printf("Colpo andato a vuoto in riga [%d] colonna [%d]\n",riga+i+1,colonna+j+1);
+			}
+			j++;
+		}
+		i++;
+	}
+}
+void LargoRaggio(tabella *t,int riga,int colonna){
+	int i,j,areaR,areaC;
+
+	if((riga==0)&&(colonna==0)){
+		areaR=2;
+		areaC=2;
+	}
+	if((riga==0)&&((colonna>0)&&(colonna<15))){
+		areaR=2;
+		areaC=3;
+		colonna--;
+	}
+	if((riga==0)&&(colonna==15)){
+		areaR=2;
+		areaC=2;
+		colonna--;
+	}
+	if(((riga>0)&&(riga<15))&&(colonna==0)){
+		areaR=3;
+		areaC=2;
+		riga--;
+	}
+	if(((riga>0)&&(riga<15))&&((colonna>0)&&(colonna<15))){
+		areaR=3;
+		areaC=3;
+		riga--;
+		colonna--;
+	}
+	if(((riga>0)&&(riga<15))&&(colonna==15)){
+		areaR=3;
+		areaC=2;
+		riga--;
+		colonna--;
+	}
+	if((riga==15)&&(colonna==0)){
+		areaR=2;
+		areaC=2;
+		riga--;
+	}
+	if((riga==15)&&((colonna>0)&&(colonna<15))){
+		areaR=2;
+		areaC=3;
+		riga--;
+		colonna--;
+	}
+	if((riga==15)&&(colonna==15)){
+		areaR=2;
+		areaC=2;
+		riga--;
+		colonna--;
+	}
+
+	i=0;
+	while(i<areaR){
+		j=0;
+		while(j<areaC){
+			Colpisci(t,riga+i,colonna+j);
+			j++;
+		}
+		i++;
+	}
+}
+void Bombardamento(tabella *t,int RigoCol){
+	int i=0,riga,colonna;
+
+	if(RigoCol==1||RigoCol==2){
+		printf("Inserisci la riga da bombardare\n");
+		riga=LeggiLettera();
+		colonna=0;
+		while(i<LeggereRighe(t)){
+			if(LeggereValore(t,riga,colonna+i)==scNave||LeggereValore(t,riga,colonna+i)==scColpito){
+				ScrivereValore(t,riga,colonna+i,scColpito);
+			}else{
+				ScrivereValore(t,riga,colonna+i,scColpitoAcqua);
+			}
+			i++;
+		}
+	}else{
+		printf("Inserisci la colonna da bombardare\n");
+		colonna=LeggiNumero();
+		riga=0;
+		while(i<LeggereColonne(t)){
+			if(LeggereValore(t,riga+i,colonna)==scNave||LeggereValore(t,riga+i,colonna)==scColpito){
+				ScrivereValore(t,riga+i,colonna,scColpito);
+			}else{
+				ScrivereValore(t,riga+i,colonna,scColpitoAcqua);
+			}
+			i++;
+		}
+	}
+}
+/*
+
+*/
